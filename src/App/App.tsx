@@ -1,18 +1,70 @@
 import React, { useState, useCallback } from "react";
+import { WaveFile } from "wavefile";
+
+class AudioBuffer {
+  sampleRate: any;
+  buffer: any;
+  wav: any;
+
+  constructor(sampleRate: any) {
+    this.sampleRate = sampleRate;
+    this.buffer = [];
+  }
+
+  push(buffer: any) {
+    // buffer.forEach((sample: any) => this.buffer.push(sample));
+    this.buffer = [...this.buffer, ...buffer];
+  }
+
+  toDataUri() {
+    return !!this.toWav() ? this.wav.toDataURI() : "";
+  }
+
+  toBuffer() {
+    return !!this.toWav() ? this.wav.toBuffer() : undefined;
+  }
+
+  toWav() {
+    return !!this.wav
+      ? this.wav
+      : this.buffer.length > 0
+      ? this.createWav()
+      : undefined;
+  }
+
+  createWav() {
+    console.log(this.buffer);
+    this.wav = new WaveFile();
+    this.wav.fromScratch(1, this.sampleRate, "32f", this.buffer);
+    this.wav.toSampleRate(16000);
+    this.wav.toBitDepth("16");
+    return this.wav;
+  }
+
+  toBlob = () => {
+    const blob = new Blob([this.wav.toBuffer()], { type: "audio/wav" });
+    return blob;
+  };
+}
 
 const AudioRecord = () => {
   const [stream, setStream] = useState<any>();
   const [media, setMedia] = useState<any>();
-  const [onRec, setOnRec] = useState(true);
+  const [onRec, setOnRec] = useState(false);
   const [source, setSource] = useState<any>();
   const [analyser, setAnalyser] = useState<any>();
   const [audioUrl, setAudioUrl] = useState<any>();
+  const [audioBuffer] = useState(new AudioBuffer({ sampleRate: 48000 }));
 
+  // 음성녹음 시작
   const onRecAudio = () => {
     // 음원정보를 담은 노드를 생성하거나 음원을 실행또는 디코딩 시키는 일을 한다
     const audioCtx = new window.AudioContext();
     // 자바스크립트를 통해 음원의 진행상태에 직접접근에 사용된다.
     const analyser = audioCtx.createScriptProcessor(0, 1, 1);
+    audioCtx.resume();
+    audioCtx.audioWorklet.addModule("");
+
     setAnalyser(analyser);
 
     function makeSound(stream: any) {
@@ -31,8 +83,13 @@ const AudioRecord = () => {
       setMedia(mediaRecorder);
       makeSound(stream);
 
+      // 3분(180초) 지나면 자동으로 음성 저장 및 녹음 중지
       analyser.onaudioprocess = function (e) {
-        // 3분(180초) 지나면 자동으로 음성 저장 및 녹음 중지
+        const buffer = e.inputBuffer.getChannelData(0);
+
+        // record(buffer);
+        audioBuffer.push(buffer);
+
         if (e.playbackTime > 180) {
           stream.getAudioTracks().forEach(function (track) {
             track.stop();
@@ -44,21 +101,21 @@ const AudioRecord = () => {
 
           mediaRecorder.ondataavailable = function (e) {
             setAudioUrl(e.data);
-            setOnRec(true);
+            setOnRec(false);
           };
         } else {
-          setOnRec(false);
+          setOnRec(true);
         }
       };
     });
   };
 
-  // 사용자가 음성 녹음을 중지했을 때
+  // 음성녹음 끝
   const offRecAudio = () => {
     // dataavailable 이벤트로 Blob 데이터에 대한 응답을 받을 수 있음
     media.ondataavailable = function (e: any) {
       setAudioUrl(e.data);
-      setOnRec(true);
+      setOnRec(false);
     };
 
     // 모든 트랙에서 stop()을 호출해 오디오 스트림을 정지
@@ -71,8 +128,12 @@ const AudioRecord = () => {
     // 메서드가 호출 된 노드 연결 해제
     analyser.disconnect();
     source.disconnect();
+
+    const result = audioBuffer.createWav();
+    console.log(result);
   };
 
+  // 결과 확인
   const onSubmitAudioFile = useCallback(() => {
     if (audioUrl) {
       console.log(URL.createObjectURL(audioUrl)); // 출력된 링크에서 녹음된 오디오 확인 가능
@@ -87,9 +148,11 @@ const AudioRecord = () => {
 
   return (
     <>
-      <button onClick={onRec ? onRecAudio : offRecAudio}>녹음</button>
+      <button onClick={onRec ? offRecAudio : onRecAudio}>
+        {onRec ? "정지" : "시작"}
+      </button>
       <button onClick={onSubmitAudioFile}>결과 확인</button>
-      <div>{onRec ? <div>'트루'</div> : <div>'뻘스'</div>}</div>
+      <audio src={audioUrl} controls></audio>
     </>
   );
 };

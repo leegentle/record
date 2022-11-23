@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { WaveFile } from "wavefile";
+import axios from "axios";
 
 class AudioBuffer {
   sampleRate: any;
@@ -111,10 +112,11 @@ const AudioRecord = () => {
   };
 
   // 음성녹음 끝
-  const offRecAudio = () => {
+  const offRecAudio = async () => {
     // dataavailable 이벤트로 Blob 데이터에 대한 응답을 받을 수 있음
     media.ondataavailable = function (e: any) {
-      setAudioUrl(e.data);
+      console.log(e.data);
+      // setAudioUrl(e.data);
       setOnRec(false);
     };
 
@@ -129,8 +131,35 @@ const AudioRecord = () => {
     analyser.disconnect();
     source.disconnect();
 
+    // 내코드
+
     const result = audioBuffer.createWav();
     console.log(result);
+
+    const formData = new FormData();
+    formData.append("file", result);
+    // const data = await api(formData);
+    const config = {
+      headers: { "content-type": "multipart/form-data" },
+    };
+    const data = await axios.post(
+      "http://3.38.129.209:8080/stt",
+      formData,
+      config
+    );
+    console.log(data);
+  };
+
+  const api = async (formData: any) => {
+    const config = {
+      headers: { "content-type": "multipart/form-data" },
+    };
+    const data = await axios.post(
+      "http://3.38.129.209:8080/stt",
+      formData,
+      config
+    );
+    return data;
   };
 
   // 결과 확인
@@ -153,6 +182,10 @@ const AudioRecord = () => {
       </button>
       <button onClick={onSubmitAudioFile}>결과 확인</button>
       <audio src={audioUrl} controls></audio>
+      <audio
+        src="https://indj.s3.ap-northeast-2.amazonaws.com/image/test/%EC%9D%BC%EB%B0%98%EB%82%A8%EC%97%AC_%EC%9D%BC%EB%B0%98%ED%86%B5%ED%95%A905_M_1526752256_27_%EC%A0%84%EB%9D%BC_%EC%8B%A4%EB%82%B4_07368.wav"
+        controls
+      ></audio>
     </>
   );
 };
